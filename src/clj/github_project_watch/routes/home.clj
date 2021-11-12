@@ -6,6 +6,7 @@
     [github-project-watch.models.core :as models]
     [clj-http.client :as client]
     [cheshire.core :as ch]
+    [clj-time.format :as f]
     ))
 
 (defn html-response [body]
@@ -161,7 +162,10 @@
         [:a {:class "font-bold text-xl" :href upload-url} release-name
          (hidden-input "release-name" release-name)
          (hidden-input "upload-url" upload-url)]
-        [:div {:class "font-bold text-lg mb-1"} (str "Last release date: " published-at)
+        [:div {:class "font-bold text-lg mb-1"} (->> published-at
+                                                     f/parse
+                                                     (f/unparse (f/formatter "YYYY-MM-dd"))
+                                                     (str "Last release date: "))
          (hidden-input "published-at" published-at)]
         [:div {:class "font-bold text-lg mb-1"} (str "Release description: " release-description)
          (hidden-input "release-description" release-description)]
