@@ -147,7 +147,8 @@
    published-at
    viewed]
   (if (= :delete request-method)
-    ""
+    (do (models/remove-repo user-id repo-link)
+    "")
     (let [id (str (gensym repo-name))] 
       [:form {:class "rounded overflow-hidden shadow-lg mt-2" :id id}
        [:div {:class "px-6 py-4"}

@@ -46,6 +46,14 @@
              (empty? (filter #(= (:repo-link %) (:repo-link repo)) repos)) (conj repos repo)
              :else repos))))
 
+(defn remove-repo [user-id repo-link]
+  (swap! db update-in [user-id :repos] 
+         (fn [repos]
+           (->> repos
+                (mapv #(if (= repo-link (:repo-link %)) nil %))
+                (filterv seq) ;; TODO: this could be smarter
+                ))))
+
 (defn update-repo [user-id {:keys [repo-link] :as repo}]
   (swap! db update-in [user-id :repos] 
          (fn [repos]
