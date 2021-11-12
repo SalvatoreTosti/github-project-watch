@@ -32,6 +32,7 @@
                  [selmer "1.12.44"]
                  [clj-http "3.12.3"]
                  [cheshire "5.10.1"]
+                 [clj-time "0.15.2"]
                  ]
 
   :min-lein-version "2.0.0"

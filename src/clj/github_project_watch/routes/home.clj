@@ -82,28 +82,6 @@
           :else :valid))
       :cannot-connect)))
 
-(defn save-repo [repo-link]
-  (let [[user repo-name] (->> #"/"
-                              (clojure.string/split (or repo-link ""))
-                              (filter seq)
-                              (drop 2))]
-    (when (and user repo-name)
-      (let [{:keys [status body]} (client/get (str "https://api.github.com/repos/" user "/" repo-name "/releases") 
-                                              {:throw-exceptions false
-                                               :headers {:Authorization (str "token" (models/fetch-api-key user-id))}
-                                               :accept :json})
-
-            latest-release (-> :published_at
-                               (sort-by (ch/parse-string body true))
-                               first)]
-        (when (and (= 200 status) body)
-          (models/add-repo
-            user-id
-            {:user user
-             :repo-name repo-name
-             :repo-link repo-link
-             :latest-release latest-release}))))))
-
 (ctmx/defcomponent ^:endpoint pal [req ^:string input]
   (models/save-api-key user-id input)
   [:form
@@ -112,10 +90,10 @@
      :hx-post "pal"
     }
    [:div {:class "col-span-2"}
-    (if (validate-api-key input)
-      [:div "ok!"]
-      [:div "can't login"])
-    [:label "Github API Key"]
+    [:label (if (validate-api-key input) 
+              {:class "text-green-500"} 
+              {:class "text-red-500"})
+     "Github API Key"]
 
     [:input
      {:name "input"
@@ -130,8 +108,37 @@
 (defn hidden-input [name value]
   [:input {:type "hidden" :name name :value value}])
 
+(ctmx/defcomponent ^:endpoint new-toggle [req repo-link viewed]
+  (if viewed 
+    (do
+      (models/mark-seen user-id repo-link true)
+      "")
+    [:div
+     {:class "rounded-full bg-blue-300 uppercase px-2 py-1 text-xs font-bold ml-2 cursor-pointer"
+      :hx-trigger "click"
+      :hx-swap "outerHTML"
+      :hx-post "new-toggle"
+      :hx-vals {:viewed true}
+      :hx-target "this"}
+     "new"
+     ])
+  
+; <span class="flex rounded-full bg-indigo-500 uppercase px-2 py-1 text-xs font-bold mr-3">New</span>
+  #_(if viewed 
+    (do (models/mark-seen user-id repo-link)
+      [:div "seen"])
+    [:label {:class "inline-flex items-center"}
+     [:input {:type "checkbox" 
+              :class "form-checkbox"
+              :name "viewed"
+              :checked viewed
+              :hx-target "this"
+              :hx-swap "outerHTML"
+              :hx-post "new-toggle"}]
+     [:span {:class "ml-2"} "new!"]]))
+
 (ctmx/defcomponent ^:endpoint release-card 
-  [{:keys [request-method]}
+  [{:keys [request-method] :as req}
    repo-name
    repo-link
    release-name
@@ -144,28 +151,19 @@
     (let [id (str (gensym repo-name))] 
       [:form {:class "rounded overflow-hidden shadow-lg mt-2" :id id}
        [:div {:class "px-6 py-4"}
-        [:div {:class "font-bold text-xl mb-2"} [:a {:href repo-link} repo-name]
-         (hidden-input "repo-name" repo-name)
-         (hidden-input "repo-link" repo-link)]
-        (when (not viewed)
-          [:label {:class "inline-flex items-center"}
-           [:input {:type "checkbox" 
-                    :class "form-checkbox"
-                    :name "viewed"
-                    :checked viewed
-                    :hx-target (str "#" id)
-                    :hx-post "release-card"}]
-           [:span {:class "ml-2"} "new!"]])
-        [:a {:class "font-bold text-xl mb-2" :href upload-url} release-name
+        [:div {:class "items-center flex mb-2"}
+         [:span {:class "font-bold text-xl "} [:a {:href repo-link} repo-name]
+          (hidden-input "repo-name" repo-name)
+          (hidden-input "repo-link" repo-link)]
+         (new-toggle req repo-link viewed)]
+         
+        [:a {:class "font-bold text-xl" :href upload-url} release-name
          (hidden-input "release-name" release-name)
-         (hidden-input "upload-url" upload-url)
-         ]
+         (hidden-input "upload-url" upload-url)]
         [:div {:class "font-bold text-lg mb-1"} (str "Last release date: " published-at)
-         (hidden-input "published-at" published-at)
-         ]
+         (hidden-input "published-at" published-at)]
         [:div {:class "font-bold text-lg mb-1"} (str "Release description: " release-description)
-         (hidden-input "release-description" release-description)
-         ]
+         (hidden-input "release-description" release-description)]
         [:button 
          {:class "bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
           :hx-delete "release-card"
@@ -173,10 +171,27 @@
          "Delete"]
         ]])))
 
+
+(ctmx/defcomponent ^:endpoint repo-cards [req ^:boolean reload]
+  (let [_ (when reload (models/reload user-id))
+        repos (models/fetch-repos user-id)]
+    [:div {:class "flex flex-col" :id "cards"}
+     (for [{:keys [repo-name repo-link latest-release viewed] :as repo} repos
+           :let [{release-name :name release-description :body :keys [published_at upload_url tag_name]} latest-release]]
+       (release-card
+         req 
+         repo-name
+         repo-link
+         (or tag_name release-name)
+         release-description 
+         upload_url
+         published_at
+         viewed))]))
+
 (ctmx/defcomponent ^:endpoint release-list [req ^:string input]
   (let [repo-status (validate-repo-link input)
         _ (when (= :valid repo-status)
-            (save-repo input))
+            (models/save-repo user-id input))
         repos (models/fetch-repos user-id)]
     [:div {:class "grid-cols-3" :id "release-list"}
     [:form
@@ -185,9 +200,13 @@
       :hx-swap "outerHTML"}
      [:input 
       {:name "input"
-       :placeholder "Add a Repo link here.."
+       :placeholder "Add a repo link here.."
        :value (if (= repo-status :valid) nil input)
-       :class "form-textarea w-full border-blue-500 border rounded"}]
+       :class (let [classes "form-textarea w-full border rounded "]
+                (cond 
+                  (not input) (str classes "border-blue-500")
+                  (not= repo-status :valid) (str classes "border-red-500")
+                  :else (str classes "border-blue-500")))}]
      [:button 
       {:class "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"}
       "Submit"]
@@ -197,21 +216,13 @@
        :valid nil
        )]
     [:button 
-     {:hx-post "release-list"
-      :hx-target "#release-list"
+     {:hx-post "repo-cards"
+      :hx-target "#cards"
       :hx-swap "outerHTML"
+      :hx-vals {:reload true}
       :class "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"}
       "Reload..."]
-
-    [:div {:class "flex flex-col"}
-     (for [{:keys [repo-name repo-link latest-release] :as repo} repos
-           :let [{release-name :name release-description :body :keys [published_at upload_url tag_name]} latest-release]
-           ;;TODO: release notes?
-           ]
-       (release-card req repo-name repo-link (or tag_name release-name) release-description upload_url published_at false)
-       )]
-   ])
-  )
+    (repo-cards req false)]))
 
 ; <div class="max-w-sm w-full lg:max-w-full lg:flex">
 ;   <div class="h-48 lg:h-auto lg:w-48 flex-none bg-cover rounded-t lg:rounded-t-none lg:rounded-l text-center overflow-hidden" style="background-image: url('/img/card-left.jpg')" title="Woman holding a mug">
