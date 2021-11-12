@@ -29,7 +29,10 @@
                  [ring-webjars "0.2.0"]
                  [ring/ring-core "1.9.4"]
                  [ring/ring-defaults "0.3.3"]
-                 [selmer "1.12.44"]]
+                 [selmer "1.12.44"]
+                 [clj-http "3.12.3"]
+                 [cheshire "5.10.1"]
+                 ]
 
   :min-lein-version "2.0.0"
   
