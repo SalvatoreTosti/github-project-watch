@@ -17,7 +17,6 @@
 (defn fetch-api-key [user-id]
   (get-in @db [user-id :api-key]))
 
-
 (defn- fetch-repo [user-id repo-link]
   (let [[user repo-name] (->> #"/"
                               (clojure.string/split (or repo-link ""))
@@ -26,7 +25,7 @@
     (when (and user repo-name)
       (let [{:keys [status body]} (client/get (str "https://api.github.com/repos/" user "/" repo-name "/releases") 
                                               {:throw-exceptions false
-                                               :headers {:Authorization (str "token" (fetch-api-key user-id))}
+                                               :headers {:Authorization (str "token " (fetch-api-key user-id))}
                                                :accept :json})
 
             latest-release (-> :published_at

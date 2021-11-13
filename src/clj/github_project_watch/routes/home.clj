@@ -59,8 +59,9 @@
     [:img
      {:class "htmx-indicator w-6 ml-1"
       :src "https://samherbert.net/svg-loaders/svg-loaders/tail-spin.svg"}]]]))
-
-(def user-id "123")
+  
+(defn req->user-id [req]
+  (get-in req [:cookies "JSESSIONID" :value]))
 
 (defn validate-api-key [api-key]
   (let [response (client/get "https://api.github.com/user"  
@@ -69,7 +70,7 @@
                                 :accept :json})]
     (= 200 (:status response))))
 
-(defn validate-repo-link [repo-link]
+(defn validate-repo-link [user-id repo-link]
   (let [[user repo-name] (->> #"/"
                               (clojure.string/split (or repo-link ""))
                               (filter seq)
@@ -90,7 +91,7 @@
       :cannot-connect)))
 
 (ctmx/defcomponent ^:endpoint pal [req ^:string input]
-  (models/save-api-key user-id input)
+  (models/save-api-key (req->user-id req) input)
   [:form
    {:hx-target "this" :hx-swap "outerHTML" :class "grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3"
      :hx-post "pal"
@@ -115,7 +116,7 @@
 (ctmx/defcomponent ^:endpoint new-toggle [req repo-link viewed]
   (if viewed 
     (do
-      (models/mark-seen user-id repo-link true)
+      (models/mark-seen (req->user-id req) repo-link true)
       "")
     [:div
      {:class "rounded-full bg-green-400 uppercase px-2 py-1 text-xs font-bold ml-2 cursor-pointer hover:opacity-75 text-white "
@@ -125,21 +126,7 @@
       :hx-vals {:viewed true}
       :hx-target "this"}
      "new"
-     ])
-  
-; <span class="flex rounded-full bg-indigo-500 uppercase px-2 py-1 text-xs font-bold mr-3">New</span>
-  #_(if viewed 
-    (do (models/mark-seen user-id repo-link)
-      [:div "seen"])
-    [:label {:class "inline-flex items-center"}
-     [:input {:type "checkbox" 
-              :class "form-checkbox"
-              :name "viewed"
-              :checked viewed
-              :hx-target "this"
-              :hx-swap "outerHTML"
-              :hx-post "new-toggle"}]
-     [:span {:class "ml-2"} "new!"]]))
+     ]))
 
 (ctmx/defcomponent ^:endpoint release-card 
   [{:keys [request-method] :as req}
@@ -151,7 +138,7 @@
    published-at
    viewed]
   (if (= :delete request-method)
-    (do (models/remove-repo user-id repo-link)
+    (do (models/remove-repo (req->user-id req) repo-link)
         "")
     (let [id (str (gensym repo-name))] 
       [:form {:class "rounded overflow-hidden shadow-lg mt-2" :id id}
@@ -185,13 +172,11 @@
         (when release-description
           [:div {:class "text-sm text-gray-600 overflow-auto"} 
            release-description
-           (hidden-input "release-description" release-description)])
-        ]])))
-
+           (hidden-input "release-description" release-description)])]])))
 
 (ctmx/defcomponent ^:endpoint repo-cards [req ^:boolean reload]
-  (let [_ (when reload (models/reload user-id))
-        repos (models/fetch-repos user-id)]
+  (let [_ (when reload (models/reload (req->user-id req)))
+        repos (models/fetch-repos (req->user-id req))]
     [:div {:class "grid grid-cols-1 lg:grid-cols-3 gap-4" :id "cards"}
      (for [{:keys [repo-name repo-link latest-release viewed] :as repo} repos
            :let [{release-name :name release-description :body :keys [published_at upload_url tag_name]} latest-release]]
@@ -206,10 +191,10 @@
          viewed))]))
 
 (ctmx/defcomponent ^:endpoint release-list [req ^:string input]
-  (let [repo-status (validate-repo-link input)
+  (let [repo-status (validate-repo-link (req->user-id req) input)
         _ (when (= :valid repo-status)
-            (models/save-repo user-id input))
-        repos (models/fetch-repos user-id)]
+            (models/save-repo (req->user-id req) input))
+        repos (models/fetch-repos (req->user-id req))]
     [:div {:id "release-list"}
     [:form
      {:hx-post "release-list"
@@ -244,29 +229,6 @@
       "my-2") 
     (repo-cards req false)]))
 
-; <div class="max-w-sm w-full lg:max-w-full lg:flex">
-;   <div class="h-48 lg:h-auto lg:w-48 flex-none bg-cover rounded-t lg:rounded-t-none lg:rounded-l text-center overflow-hidden" style="background-image: url('/img/card-left.jpg')" title="Woman holding a mug">
-;   </div>
-;   <div class="border-r border-b border-l border-gray-400 lg:border-l-0 lg:border-t lg:border-gray-400 bg-white rounded-b lg:rounded-b-none lg:rounded-r p-4 flex flex-col justify-between leading-normal">
-;     <div class="mb-8">
-;       <p class="text-sm text-gray-600 flex items-center">
-;         <svg class="fill-current text-gray-500 w-3 h-3 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-;           <path d="M4 8V6a6 6 0 1 1 12 0v2h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2v-8c0-1.1.9-2 2-2h1zm5 6.73V17h2v-2.27a2 2 0 1 0-2 0zM7 6v2h6V6a3 3 0 0 0-6 0z" />
-;         </svg>
-;         Members only
-;       </p>
-;       <div class="text-gray-900 font-bold text-xl mb-2">Can coffee make you a better developer?</div>
-;       <p class="text-gray-700 text-base">Lorem ipsum dolor sit amet, consectetur adipisicing elit. Voluptatibus quia, nulla! Maiores et perferendis eaque, exercitationem praesentium nihil.</p>
-;     </div>
-;     <div class="flex items-center">
-;       <img class="w-10 h-10 rounded-full mr-4" src="/img/jonathan.jpg" alt="Avatar of Jonathan Reinink">
-;       <div class="text-sm">
-;         <p class="text-gray-900 leading-none">Jonathan Reinink</p>
-;         <p class="text-gray-600">Aug 18</p>
-;       </div>
-;     </div>
-;   </div>
-; </div>
 (defn home-routes []
   (ctmx/make-routes
    "/"
@@ -275,6 +237,5 @@
        [:div (nav-bar)
         [:div {:class "container mx-auto p-4"}
          [:div {:class "font-bold text-blue-500 text-center my-5 text-5xl"} "Github Project Watch"]
-         (pal req (models/fetch-api-key user-id))
-         (release-list req nil)
-         ]]))))
+         (pal req (models/fetch-api-key (req->user-id req)))
+         (release-list req nil)]]))))
