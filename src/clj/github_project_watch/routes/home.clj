@@ -150,7 +150,6 @@
        [:div {:class "px-6 py-4"}
         [:div {:class "items-center flex mb-2"}
          [:span {:class "font-bold text-xl text-blue-500 hover:opacity-75"} [:a {:href repo-link :target "_"} repo-name]
-          (hidden-input "repo-name" repo-name)
           (hidden-input "repo-link" repo-link)]
          (new-toggle req repo-link viewed)
          [:div {:class "text-gray-500 hover:opacity-75 ml-auto fas fa-times fa-lg cursor-pointer"
@@ -165,8 +164,7 @@
           [:div {:class "font-bold text-gray-500"}
            "no releases yet, check back later!"])
         [:a {:class "font-bold text-gray-700 hover:opacity-75" :href html-url :target "_"} release-name
-         (hidden-input "release-name" release-name)
-         (hidden-input "html-url" html-url)]
+         ]
         (when published-at 
           (let [release-date (->> published-at
                                   f/parse
@@ -180,11 +178,11 @@
                               (str days-since-release " days ago"))]
             [:div {:class "text-sm text-gray-600"} 
              (str release-date " (" days-string ")")
-             (hidden-input "published-at" published-at)]))
+             ]))
         (when release-description
           [:div {:class "text-sm text-gray-600 overflow-auto mt-2"} 
            release-description
-           (hidden-input "release-description" release-description)])]])))
+           ])]])))
 
 (ctmx/defcomponent ^:endpoint repo-cards 
   [{:keys [request-method] :as req} ^:boolean reload ^:boolean reset]
