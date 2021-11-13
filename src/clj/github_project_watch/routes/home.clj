@@ -23,6 +23,7 @@
               :content "width=device-width, initial-scale=1, shrink-to-fit=no"}]]
      [:body (render/walk-attrs body)]
      [:script {:src "https://unpkg.com/htmx.org@1.5.0"}]
+     [:script {:src "https://kit.fontawesome.com/e8c67d78ce.js" :crossorigin "anonymous"}]
      [:link {:href "https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" :rel "stylesheet"}]
      ))))
 
@@ -35,11 +36,7 @@
      [:a {:class "text-sm font-bold leading-relaxed inline-block mr-4 py-2 whitespace-nowrap uppercase text-white hover:opacity-75"
           :href "/api/api-docs/"
           :target "_"}
-      "API"]
-     [:a {:class "text-sm font-bold leading-relaxed inline-block mr-4 py-2 whitespace-nowrap uppercase text-white hover:opacity-75" 
-          :href "https://www.colorhunt.co/"
-          :target "_"}
-      "colorhunt.co" ]]
+      "Github"]]
     [:div {:class "flex flex-grow items-center"}
      [:ul {:class "flex flex-row list-none ml-auto"}
       [:li {:class "nav-item"}
@@ -49,12 +46,6 @@
         [:i {:class "text-lg leading-lg text-white"} "Salvatore"]]]]]]])
 
 (def user-id "123")
-
-(ctmx/defcomponent ^:endpoint root [req ^:int num-clicks]
-  [:div.m-3 {:hx-post "root"
-             :hx-swap "outerHTML"
-             :hx-vals {:num-clicks (inc num-clicks)}}
-   "You have clicked me " num-clicks " times."])
 
 (defn validate-api-key [api-key]
   (let [response (client/get "https://api.github.com/user"  
@@ -115,7 +106,7 @@
       (models/mark-seen user-id repo-link true)
       "")
     [:div
-     {:class "rounded-full bg-blue-300 uppercase px-2 py-1 text-xs font-bold ml-2 cursor-pointer"
+     {:class "rounded-full bg-green-400 uppercase px-2 py-1 text-xs font-bold ml-2 cursor-pointer hover:opacity-75 text-white "
       :hx-trigger "click"
       :hx-swap "outerHTML"
       :hx-post "new-toggle"
@@ -149,38 +140,47 @@
    viewed]
   (if (= :delete request-method)
     (do (models/remove-repo user-id repo-link)
-    "")
+        "")
     (let [id (str (gensym repo-name))] 
       [:form {:class "rounded overflow-hidden shadow-lg mt-2" :id id}
        [:div {:class "px-6 py-4"}
         [:div {:class "items-center flex mb-2"}
-         [:span {:class "font-bold text-xl "} [:a {:href repo-link} repo-name]
+         [:span {:class "font-bold text-xl text-blue-500 hover:opacity-75"} [:a {:href repo-link} repo-name]
           (hidden-input "repo-name" repo-name)
           (hidden-input "repo-link" repo-link)]
-         (new-toggle req repo-link viewed)]
-         
-        [:a {:class "font-bold text-xl" :href upload-url} release-name
+         (new-toggle req repo-link viewed)
+         [:div {:class "text-gray-500 hover:opacity-75 ml-auto fas fa-times fa-lg cursor-pointer"
+                :hx-delete "release-card"
+                :hx-target (str "#" id)
+                :hx-swap "outerHTML"
+                }]]
+        (when (and 
+                (not release-name) 
+                (not published-at)
+                (not release-description))
+          [:div {:class "font-bold text-gray-500"}
+           "no releases yet, check back later!"])
+        [:a {:class "font-bold text-gray-700" :href upload-url} release-name
          (hidden-input "release-name" release-name)
          (hidden-input "upload-url" upload-url)]
-        [:div {:class "font-bold text-lg mb-1"} (->> published-at
-                                                     f/parse
-                                                     (f/unparse (f/formatter "YYYY-MM-dd"))
-                                                     (str "Last release date: "))
-         (hidden-input "published-at" published-at)]
-        [:div {:class "font-bold text-lg mb-1"} (str "Release description: " release-description)
-         (hidden-input "release-description" release-description)]
-        [:button 
-         {:class "bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
-          :hx-delete "release-card"
-          :hx-target (str "#" id)}
-         "Delete"]
+        (when published-at 
+          [:div {:class "text-sm text-gray-600"} 
+           (->> published-at
+                f/parse
+                (f/unparse (f/formatter "YYYY-MM-dd"))
+                #_(str "latest release date: "))
+           (hidden-input "published-at" published-at)])
+        (when release-description
+          [:div {:class "text-sm text-gray-600 overflow-auto"} 
+           release-description
+           (hidden-input "release-description" release-description)])
         ]])))
 
 
 (ctmx/defcomponent ^:endpoint repo-cards [req ^:boolean reload]
   (let [_ (when reload (models/reload user-id))
         repos (models/fetch-repos user-id)]
-    [:div {:class "flex flex-col" :id "cards"}
+    [:div {:class "grid grid-cols-1 lg:grid-cols-3 gap-4" :id "cards"}
      (for [{:keys [repo-name repo-link latest-release viewed] :as repo} repos
            :let [{release-name :name release-description :body :keys [published_at upload_url tag_name]} latest-release]]
        (release-card
@@ -226,7 +226,11 @@
       :hx-swap "outerHTML"
       :hx-vals {:reload true}
       :class "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"}
-      "Reload..."]
+      [:div {:class "flex items-center"} 
+       "Reload..."
+       [:img
+        {:class "htmx-indicator w-6 ml-1"
+         :src "https://samherbert.net/svg-loaders/svg-loaders/tail-spin.svg"}]]]
     (repo-cards req false)]))
 
 ; <div class="max-w-sm w-full lg:max-w-full lg:flex">
