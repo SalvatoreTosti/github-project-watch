@@ -63,12 +63,12 @@
   (get-in req [:cookies "JSESSIONID" :value]))
 
 (defn validate-api-key [api-key]
-  (->> {:throw-exceptions false
-        :headers {:Authorization (str "token " api-key)}
-        :accept :json}
-       (client/get "https://api.github.com/user")
-       :status
-       (= 200)))
+  (let [{:keys [status body]} (->> {:throw-exceptions false
+                                    :headers {:Authorization (str "token " api-key)}
+                                    :accept :json}
+                                   (client/get "https://api.github.com/user"))]
+    (when (= 200 status) 
+      (ch/parse-string body true))))
 
 (defn validate-repo-link [user-id repo-link]
   (let [[user repo-name] (->> #"/"
@@ -89,22 +89,28 @@
       :cannot-connect)))
 
 (ctmx/defcomponent ^:endpoint pal [req ^:string input]
-  (models/save-api-key (req->user-id req) input)
   [:form
    {:hx-target "this" :hx-swap "outerHTML" :class "grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3"
      :hx-post "pal"}
    [:div {:class "col-span-1  lg:col-span-2"}
-    [:label (if (validate-api-key input) 
-              {:class "text-green-500"} 
-              {:class "text-red-500"})
-     "Github API Key"]
-
-    [:input
-     {:name "input"
-      :autocomplete "off"
-      :value input 
-      :class "form-textarea w-full border-blue-500 border rounded"
-      :placeholder "Enter your Github API key..."}]]
+    (let [{:keys [login]} (validate-api-key input)
+          input-border (cond 
+                         login "border-blue-500"
+                         input "border-red-500"
+                         :else "border-blue-500")]
+      (when login
+        (models/save-api-key (req->user-id req) input))
+      [:div 
+       (cond 
+        login [:label {:class "text-green-500"} login [:div {:class "fab fa-github ml-1"}]]
+        input [:label {:class "text-red-500"} "Invalid Github API Key"]
+        :else [:label "Github API Key"])
+      [:input
+       {:name "input"
+        :autocomplete "off"
+        :value input 
+        :class (str "form-textarea w-full border rounded " input-border)
+        :placeholder "Enter your Github API key..."}]])]
    (submit-button "Save API key" {} "col-span-1")])
 
 (defn hidden-input [name value]
@@ -122,8 +128,7 @@
       :hx-post "new-toggle"
       :hx-vals {:viewed true}
       :hx-target "this"}
-     "new"
-     ]))
+     "new"]))
 
 (ctmx/defcomponent ^:endpoint release-card 
   [{:keys [request-method] :as req}
@@ -173,7 +178,6 @@
 (ctmx/defcomponent ^:endpoint repo-cards [req ^:boolean reload]
   (let [_ (when reload (models/reload (req->user-id req)))
         repos (models/fetch-repos (req->user-id req))]
-    (clojure.pprint/pprint repos)
     [:div {:class "grid grid-cols-1 lg:grid-cols-3 gap-4" :id "cards"}
      (for [{:keys [repo-name repo-link latest-release viewed] :as repo} repos
            :let [{release-name :name release-description :body :keys [published_at html_url tag_name]} latest-release]]
@@ -189,9 +193,13 @@
 
 (ctmx/defcomponent ^:endpoint release-list [req ^:string input]
   (let [repo-status (validate-repo-link (req->user-id req) input)
-        _ (when (= :valid repo-status)
-            (models/save-repo (req->user-id req) input))
-        repos (models/fetch-repos (req->user-id req))]
+        repos (models/fetch-repos (req->user-id req))
+        repo-exists (-> :repo-link
+                        (mapv repos)
+                        set
+                        (get input))]
+    (when (and (= :valid repo-status) (not repo-exists))
+      (models/save-repo (req->user-id req) input))
     [:div {:id "release-list"}
     [:form
      {:hx-post "release-list"
@@ -200,10 +208,13 @@
       :class  "grid-cols-1 lg:grid-cols-3 grid gap-3"}
      [:div {:class "col-span-1 lg:col-span-2"}
       (if input
-        (let [label (case repo-status 
-                      :cannot-connect [:label {:class "text-red-500"} "We couldn't find that repo!"]
-                      :no-releases [:label {:class  "text-yellow-500"} "That repo hasn't performed any releases!"]
-                      :valid [:label {:class "text-green-500"} "Added repo to list!"])] 
+        (let [label 
+              (cond 
+                (= :cannot-connect repo-status) [:label {:class "text-red-500"} "We couldn't find that repo!"]
+                (= :no-releases repo-status) [:label {:class  "text-yellow-500"} "That repo hasn't performed any releases!"]
+                repo-exists [:label {:class  "text-yellow-500"} "You're already watching that repo!"]
+
+                (= :valid repo-status) [:label {:class "text-green-500"} "Added repo to list!"])] 
           label)
         [:label "Github Repository Link"])
     
