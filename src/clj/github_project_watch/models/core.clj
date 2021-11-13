@@ -1,15 +1,14 @@
 (ns github-project-watch.models.core
-  (:require [clj-http.client :as client]
-            [cheshire.core :as ch]
-            [clj-time.core :as t]
-            [clj-time.format :as f]
-            ))
+  (:require 
+    [clj-http.client :as client]
+    [cheshire.core :as ch]
+    [clj-time.core :as t]
+    [clj-time.format :as f]))
 
 (defonce db (atom {}))
 
 (comment
-  (clojure.pprint/pprint @db)
-  )
+  (clojure.pprint/pprint @db))
 
 (defn save-api-key [user-id api-key]
   (swap! db assoc-in [user-id :api-key] api-key))
@@ -104,21 +103,6 @@
                        (assoc fresh-repo :viewed false)
                        existing-repo))) %))))
 
-
 (defn reset-viewed-repos [user-id]
   (swap! db update-in [user-id :repos] 
          #(mapv (fn [repo] (assoc repo :viewed false)) %)))
-
-(comment 
-  (reload "123")
-  
-  )
-
-(comment
-  (mark-viewed "123"
-              "https://github.com/borkdude/jet"
-             false 
-             )
-  )
-
-

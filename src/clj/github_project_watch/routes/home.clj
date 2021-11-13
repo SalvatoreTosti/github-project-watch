@@ -31,8 +31,6 @@
   [:nav {:class "relative flex flex-wrap items-center justify-between px-2 py-3 bg-blue-500 mb-3"}
    [:div {:class "container px-4 mx-auto flex flex-wrap items-center justify-between"}
     [:div {:class "relative flex justify-between w-auto px-4 static block justify-start"}
-     [:a {:class "text-sm font-bold leading-relaxed inline-block mr-4 py-2 whitespace-nowrap uppercase text-white hover:opacity-75" :href "#"}
-      "Home"]
      [:a {:class "text-sm font-bold leading-relaxed inline-block mr-4 py-2 whitespace-nowrap uppercase text-white hover:opacity-75"
           :href "https://github.com/SalvatoreTosti/github-project-watch"
           :target "_"}
@@ -242,13 +240,14 @@
                   (not= repo-status :valid) (str classes "border-red-500")
                   :else (str classes "border-blue-500")))}]]
      (submit-button "Add repo")]
-    (submit-button 
+    [:div {:class "flex my-2"}
+     (submit-button 
       "Check for releases..." 
       {:hx-post "repo-cards"
        :hx-target "#cards"
        :hx-swap "outerHTML"
        :hx-vals {:reload true}}
-      "my-2") 
+      nil) 
     [:button 
      {:class "bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded ml-3"
       :hx-post "repo-cards"
@@ -257,11 +256,10 @@
       :hx-confirm (str "Are you sure you wish to reset your viewed releases?")
       :hx-vals {:reset true}}
      [:div {:class "flex justify-center"} 
-      "Reset viewed releases"
+      "Reset viewed releases..."
       [:img
        {:class "htmx-indicator w-6 ml-1"
-        :src "https://samherbert.net/svg-loaders/svg-loaders/tail-spin.svg"}]]]
-
+        :src "https://samherbert.net/svg-loaders/svg-loaders/tail-spin.svg"}]]]]
     (repo-cards req false false)]))
 
 (defn home-routes []
