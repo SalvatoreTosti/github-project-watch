@@ -45,6 +45,21 @@
             :target "_"}
         [:i {:class "text-lg leading-lg text-white"} "Salvatore"]]]]]]])
 
+(defn submit-button
+  ([title]
+   (submit-button title {} nil))
+  ([title button-attrs additional-classes]
+  [:button 
+   (cond-> 
+     {:class "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"}
+     additional-classes (update :class #(str % " " additional-classes))
+     :always (merge button-attrs))
+   [:div {:class "flex justify-center"} 
+    title
+    [:img
+     {:class "htmx-indicator w-6 ml-1"
+      :src "https://samherbert.net/svg-loaders/svg-loaders/tail-spin.svg"}]]]))
+
 (def user-id "123")
 
 (defn validate-api-key [api-key]
@@ -92,9 +107,7 @@
       :value input 
       :class "form-textarea w-full border-blue-500 border rounded"
       :placeholder "Enter your Github API key..."}]]
-   [:button 
-    {:class "col-span-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"}
-    "Save API Key"]])
+   (submit-button "Save API key" {} "col-span-1")])
 
 (defn hidden-input [name value]
   [:input {:type "hidden" :name name :value value}])
@@ -204,13 +217,13 @@
       :hx-swap "outerHTML"
       :class  "grid-cols-1 lg:grid-cols-3 grid gap-3"}
      [:div {:class "col-span-1 lg:col-span-2"}
-      (when input
+      (if input
         (let [label (case repo-status 
                       :cannot-connect [:label {:class "text-red-500"} "We couldn't find that repo!"]
                       :no-releases [:label {:class  "text-yellow-500"} "That repo hasn't performed any releases!"]
                       :valid [:label {:class "text-green-500"} "Added repo to list!"])] 
-          label))
-
+          label)
+        [:label "Github Repository Link"])
     
       [:input 
       {:name "input"
@@ -221,23 +234,14 @@
                   (not input) (str classes "border-blue-500")
                   (not= repo-status :valid) (str classes "border-red-500")
                   :else (str classes "border-blue-500")))}]]
-     [:button 
-      {:class "col-span-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"}
-      [:div {:class "flex items-center justify-center "} "Submit"
-      [:img
-        {:class "htmx-indicator w-6 ml-1"
-         :src "https://samherbert.net/svg-loaders/svg-loaders/tail-spin.svg"}]]]]
-    [:button 
-     {:hx-post "repo-cards"
-      :hx-target "#cards"
-      :hx-swap "outerHTML"
-      :hx-vals {:reload true}
-      :class "bg-blue-500 hover:bg-blue-700 text-white font-bold my-2 py-2 px-4 rounded"}
-      [:div {:class "flex items-center"} 
-       "Check releases..."
-       [:img
-        {:class "htmx-indicator w-6 ml-1"
-         :src "https://samherbert.net/svg-loaders/svg-loaders/tail-spin.svg"}]]]
+     (submit-button "Add repo")]
+    (submit-button 
+      "Check for releases..." 
+      {:hx-post "repo-cards"
+       :hx-target "#cards"
+       :hx-swap "outerHTML"
+       :hx-vals {:reload true}}
+      "my-2") 
     (repo-cards req false)]))
 
 ; <div class="max-w-sm w-full lg:max-w-full lg:flex">
