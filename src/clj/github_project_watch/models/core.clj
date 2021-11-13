@@ -30,13 +30,10 @@
                               (filter seq)
                               (drop 2))]
     (when (and user repo-name)
-      (let [{:keys [status body]} 
-            (http-get-authenticated 
-              user-id 
-              (str "https://api.github.com/repos/" user "/" repo-name "/releases"))
-            latest-release (-> :published_at
-                               (sort-by (ch/parse-string body true))
-                               first)]
+      (let [{:keys [status body]} (http-get-authenticated user-id (str "https://api.github.com/repos/" user "/" repo-name "/releases"))
+             latest-release (->> (ch/parse-string body true)
+                                 (sort-by #(f/parse (:published_at %)))
+                                 last)]
         (when (and (= 200 status) body)
           {:user user
            :repo-name repo-name
@@ -77,12 +74,12 @@
 (defn fetch-repos [user-id]
   (get-in @db [user-id :repos]))
 
-(defn mark-seen [user-id repo-link seen?]
+(defn mark-viewed [user-id repo-link viewed?]
   (swap! db update-in [user-id :repos] 
          (fn [repos]
            (mapv 
              #(if (= repo-link (:repo-link %))
-                (assoc % :viewed seen?)
+                (assoc % :viewed viewed?)
                 %)
              repos))))
 
@@ -107,13 +104,18 @@
                        (assoc fresh-repo :viewed false)
                        existing-repo))) %))))
 
+
+(defn reset-viewed-repos [user-id]
+  (swap! db update-in [user-id :repos] 
+         #(mapv (fn [repo] (assoc repo :viewed false)) %)))
+
 (comment 
   (reload "123")
   
   )
 
 (comment
-  (mark-seen "123"
+  (mark-viewed "123"
               "https://github.com/borkdude/jet"
              false 
              )

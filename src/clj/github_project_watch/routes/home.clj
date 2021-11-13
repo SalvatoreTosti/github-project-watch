@@ -6,7 +6,8 @@
     [github-project-watch.models.core :as models]
     [clj-http.client :as client]
     [cheshire.core :as ch]
-    [clj-time.format :as f]))
+    [clj-time.format :as f]
+    [clj-time.core :as t]))
 
 (defn html-response [body]
   {:status 200
@@ -108,6 +109,7 @@
       [:input
        {:name "input"
         :autocomplete "off"
+        :type "password"
         :value input 
         :class (str "form-textarea w-full border rounded " input-border)
         :placeholder "Enter your Github API key..."}]])]
@@ -119,7 +121,7 @@
 (ctmx/defcomponent ^:endpoint new-toggle [req repo-link viewed]
   (if viewed 
     (do
-      (models/mark-seen (req->user-id req) repo-link true)
+      (models/mark-viewed (req->user-id req) repo-link true)
       "")
     [:div
      {:class "rounded-full bg-green-400 uppercase px-2 py-1 text-xs font-bold ml-2 cursor-pointer hover:opacity-75 text-white "
@@ -142,7 +144,10 @@
   (if (= :delete request-method)
     (do (models/remove-repo (req->user-id req) repo-link)
         "")
-    (let [id (str (gensym repo-name))] 
+    (let [id (-> repo-name
+                 (clojure.string/replace #"[^a-zA-Z\d\s:]" "-")
+                 gensym
+                 str)] 
       [:form {:class "rounded overflow-hidden shadow-lg mt-2" :id id}
        [:div {:class "px-6 py-4"}
         [:div {:class "items-center flex mb-2"}
@@ -152,6 +157,7 @@
          (new-toggle req repo-link viewed)
          [:div {:class "text-gray-500 hover:opacity-75 ml-auto fas fa-times fa-lg cursor-pointer"
                 :hx-delete "release-card"
+                :hx-confirm (str "Are you sure you wish to stop watching " repo-name "?")
                 :hx-target (str "#" id)
                 :hx-swap "outerHTML"}]]
         (when (and 
@@ -164,19 +170,28 @@
          (hidden-input "release-name" release-name)
          (hidden-input "html-url" html-url)]
         (when published-at 
-          [:div {:class "text-sm text-gray-600"} 
-           (->> published-at
-                f/parse
-                (f/unparse (f/formatter "YYYY-MM-dd"))
-                #_(str "latest release date: "))
-           (hidden-input "published-at" published-at)])
+          (let [release-date (->> published-at
+                                  f/parse
+                                  (f/unparse (f/formatter "YYYY-MM-dd")))
+
+                days-since-release (->> (t/now)
+                                        (t/interval (f/parse published-at))
+                                        t/in-days)
+                days-string (if (> days-since-release 365) 
+                              "over a year ago" 
+                              (str days-since-release " days ago"))]
+            [:div {:class "text-sm text-gray-600"} 
+             (str release-date " (" days-string ")")
+             (hidden-input "published-at" published-at)]))
         (when release-description
-          [:div {:class "text-sm text-gray-600 overflow-auto"} 
+          [:div {:class "text-sm text-gray-600 overflow-auto mt-2"} 
            release-description
            (hidden-input "release-description" release-description)])]])))
 
-(ctmx/defcomponent ^:endpoint repo-cards [req ^:boolean reload]
+(ctmx/defcomponent ^:endpoint repo-cards 
+  [{:keys [request-method] :as req} ^:boolean reload ^:boolean reset]
   (let [_ (when reload (models/reload (req->user-id req)))
+        _ (when reset (models/reset-viewed-repos (req->user-id req)))
         repos (models/fetch-repos (req->user-id req))]
     [:div {:class "grid grid-cols-1 lg:grid-cols-3 gap-4" :id "cards"}
      (for [{:keys [repo-name repo-link latest-release viewed] :as repo} repos
@@ -207,7 +222,8 @@
       :hx-swap "outerHTML"
       :class  "grid-cols-1 lg:grid-cols-3 grid gap-3"}
      [:div {:class "col-span-1 lg:col-span-2"}
-      (if input
+      (if (empty? input)
+        [:label "Github Repository Link"]
         (let [label 
               (cond 
                 (= :cannot-connect repo-status) [:label {:class "text-red-500"} "We couldn't find that repo!"]
@@ -215,12 +231,10 @@
                 repo-exists [:label {:class  "text-yellow-500"} "You're already watching that repo!"]
 
                 (= :valid repo-status) [:label {:class "text-green-500"} "Added repo to list!"])] 
-          label)
-        [:label "Github Repository Link"])
-    
+          label))
       [:input 
       {:name "input"
-       :placeholder "Add a repo link here.."
+       :placeholder "Add a repo link here..."
        :value (if (= repo-status :valid) nil input)
        :class (let [classes " form-textarea w-full border rounded "]
                 (cond 
@@ -235,7 +249,20 @@
        :hx-swap "outerHTML"
        :hx-vals {:reload true}}
       "my-2") 
-    (repo-cards req false)]))
+    [:button 
+     {:class "bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded ml-3"
+      :hx-post "repo-cards"
+      :hx-target "#cards"
+      :hx-swap "outerHTML"
+      :hx-confirm (str "Are you sure you wish to reset your viewed releases?")
+      :hx-vals {:reset true}}
+     [:div {:class "flex justify-center"} 
+      "Reset viewed releases"
+      [:img
+       {:class "htmx-indicator w-6 ml-1"
+        :src "https://samherbert.net/svg-loaders/svg-loaders/tail-spin.svg"}]]]
+
+    (repo-cards req false false)]))
 
 (defn home-routes []
   (ctmx/make-routes
