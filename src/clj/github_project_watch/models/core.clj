@@ -17,17 +17,23 @@
 (defn fetch-api-key [user-id]
   (get-in @db [user-id :api-key]))
 
+(defn http-get-authenticated [user-id url]
+  (client/get 
+    url
+    {:throw-exceptions false
+     :headers {:Authorization (str "token " (fetch-api-key user-id))}
+     :accept :json}))
+
 (defn- fetch-repo [user-id repo-link]
   (let [[user repo-name] (->> #"/"
                               (clojure.string/split (or repo-link ""))
                               (filter seq)
                               (drop 2))]
     (when (and user repo-name)
-      (let [{:keys [status body]} (client/get (str "https://api.github.com/repos/" user "/" repo-name "/releases") 
-                                              {:throw-exceptions false
-                                               :headers {:Authorization (str "token " (fetch-api-key user-id))}
-                                               :accept :json})
-
+      (let [{:keys [status body]} 
+            (http-get-authenticated 
+              user-id 
+              (str "https://api.github.com/repos/" user "/" repo-name "/releases"))
             latest-release (-> :published_at
                                (sort-by (ch/parse-string body true))
                                first)]

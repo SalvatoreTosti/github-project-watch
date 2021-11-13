@@ -6,8 +6,7 @@
     [github-project-watch.models.core :as models]
     [clj-http.client :as client]
     [cheshire.core :as ch]
-    [clj-time.format :as f]
-    ))
+    [clj-time.format :as f]))
 
 (defn html-response [body]
   {:status 200
@@ -64,11 +63,12 @@
   (get-in req [:cookies "JSESSIONID" :value]))
 
 (defn validate-api-key [api-key]
-  (let [response (client/get "https://api.github.com/user"  
-                               {:throw-exceptions false
-                                :headers {:Authorization (str "token " api-key)}
-                                :accept :json})]
-    (= 200 (:status response))))
+  (->> {:throw-exceptions false
+        :headers {:Authorization (str "token " api-key)}
+        :accept :json}
+       (client/get "https://api.github.com/user")
+       :status
+       (= 200)))
 
 (defn validate-repo-link [user-id repo-link]
   (let [[user repo-name] (->> #"/"
@@ -76,11 +76,9 @@
                               (filter seq)
                               (drop 2))]
     (if (and user repo-name)
-      (let [{:keys [status body]} (client/get (str "https://api.github.com/repos/" user "/" repo-name "/releases") 
-                                              {:throw-exceptions false
-                                               :headers {:Authorization (str "token " (models/fetch-api-key user-id))}
-                                               :accept :json})
-            
+      (let [{:keys [status body]} (models/http-get-authenticated 
+                                    user-id 
+                                    (str "https://api.github.com/repos/" user "/" repo-name "/releases"))
             {:keys [html_url created_at] :as latest-release} (-> :published_at
                                                                  (sort-by (ch/parse-string body true))
                                                                  first)]
@@ -94,8 +92,7 @@
   (models/save-api-key (req->user-id req) input)
   [:form
    {:hx-target "this" :hx-swap "outerHTML" :class "grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3"
-     :hx-post "pal"
-    }
+     :hx-post "pal"}
    [:div {:class "col-span-1  lg:col-span-2"}
     [:label (if (validate-api-key input) 
               {:class "text-green-500"} 
@@ -134,7 +131,7 @@
    repo-link
    release-name
    release-description
-   upload-url
+   html-url
    published-at
    viewed]
   (if (= :delete request-method)
@@ -144,24 +141,23 @@
       [:form {:class "rounded overflow-hidden shadow-lg mt-2" :id id}
        [:div {:class "px-6 py-4"}
         [:div {:class "items-center flex mb-2"}
-         [:span {:class "font-bold text-xl text-blue-500 hover:opacity-75"} [:a {:href repo-link} repo-name]
+         [:span {:class "font-bold text-xl text-blue-500 hover:opacity-75"} [:a {:href repo-link :target "_"} repo-name]
           (hidden-input "repo-name" repo-name)
           (hidden-input "repo-link" repo-link)]
          (new-toggle req repo-link viewed)
          [:div {:class "text-gray-500 hover:opacity-75 ml-auto fas fa-times fa-lg cursor-pointer"
                 :hx-delete "release-card"
                 :hx-target (str "#" id)
-                :hx-swap "outerHTML"
-                }]]
+                :hx-swap "outerHTML"}]]
         (when (and 
                 (not release-name) 
                 (not published-at)
                 (not release-description))
           [:div {:class "font-bold text-gray-500"}
            "no releases yet, check back later!"])
-        [:a {:class "font-bold text-gray-700" :href upload-url} release-name
+        [:a {:class "font-bold text-gray-700 hover:opacity-75" :href html-url :target "_"} release-name
          (hidden-input "release-name" release-name)
-         (hidden-input "upload-url" upload-url)]
+         (hidden-input "html-url" html-url)]
         (when published-at 
           [:div {:class "text-sm text-gray-600"} 
            (->> published-at
@@ -177,16 +173,17 @@
 (ctmx/defcomponent ^:endpoint repo-cards [req ^:boolean reload]
   (let [_ (when reload (models/reload (req->user-id req)))
         repos (models/fetch-repos (req->user-id req))]
+    (clojure.pprint/pprint repos)
     [:div {:class "grid grid-cols-1 lg:grid-cols-3 gap-4" :id "cards"}
      (for [{:keys [repo-name repo-link latest-release viewed] :as repo} repos
-           :let [{release-name :name release-description :body :keys [published_at upload_url tag_name]} latest-release]]
+           :let [{release-name :name release-description :body :keys [published_at html_url tag_name]} latest-release]]
        (release-card
          req 
          repo-name
          repo-link
          (or tag_name release-name)
          release-description 
-         upload_url
+         html_url
          published_at
          viewed))]))
 
