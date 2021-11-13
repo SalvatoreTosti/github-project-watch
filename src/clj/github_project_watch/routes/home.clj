@@ -34,7 +34,7 @@
      [:a {:class "text-sm font-bold leading-relaxed inline-block mr-4 py-2 whitespace-nowrap uppercase text-white hover:opacity-75" :href "#"}
       "Home"]
      [:a {:class "text-sm font-bold leading-relaxed inline-block mr-4 py-2 whitespace-nowrap uppercase text-white hover:opacity-75"
-          :href "/api/api-docs/"
+          :href "https://github.com/SalvatoreTosti/github-project-watch"
           :target "_"}
       "Github"]]
     [:div {:class "flex flex-grow items-center"}
@@ -77,11 +77,10 @@
 (ctmx/defcomponent ^:endpoint pal [req ^:string input]
   (models/save-api-key user-id input)
   [:form
-   {:hx-target "this" :hx-swap "outerHTML" :class "grid justify-center items-center grid-flow-col grid-cols-3 gap-5 mb-3"
-
+   {:hx-target "this" :hx-swap "outerHTML" :class "grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3"
      :hx-post "pal"
     }
-   [:div {:class "col-span-2"}
+   [:div {:class "col-span-1  lg:col-span-2"}
     [:label (if (validate-api-key input) 
               {:class "text-green-500"} 
               {:class "text-red-500"})
@@ -94,8 +93,8 @@
       :class "form-textarea w-full border-blue-500 border rounded"
       :placeholder "Enter your Github API key..."}]]
    [:button 
-    {:class "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"}
-    "Submit"]])
+    {:class "col-span-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"}
+    "Save API Key"]])
 
 (defn hidden-input [name value]
   [:input {:type "hidden" :name name :value value}])
@@ -198,36 +197,44 @@
         _ (when (= :valid repo-status)
             (models/save-repo user-id input))
         repos (models/fetch-repos user-id)]
-    [:div {:class "grid-cols-3" :id "release-list"}
+    [:div {:id "release-list"}
     [:form
      {:hx-post "release-list"
       :hx-target "#release-list"
-      :hx-swap "outerHTML"}
-     [:input 
+      :hx-swap "outerHTML"
+      :class  "grid-cols-1 lg:grid-cols-3 grid gap-3"}
+     [:div {:class "col-span-1 lg:col-span-2"}
+      (when input
+        (let [label (case repo-status 
+                      :cannot-connect [:label {:class "text-red-500"} "We couldn't find that repo!"]
+                      :no-releases [:label {:class  "text-yellow-500"} "That repo hasn't performed any releases!"]
+                      :valid [:label {:class "text-green-500"} "Added repo to list!"])] 
+          label))
+
+    
+      [:input 
       {:name "input"
        :placeholder "Add a repo link here.."
        :value (if (= repo-status :valid) nil input)
-       :class (let [classes "form-textarea w-full border rounded "]
+       :class (let [classes " form-textarea w-full border rounded "]
                 (cond 
                   (not input) (str classes "border-blue-500")
                   (not= repo-status :valid) (str classes "border-red-500")
-                  :else (str classes "border-blue-500")))}]
+                  :else (str classes "border-blue-500")))}]]
      [:button 
-      {:class "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"}
-      "Submit"]
-     (case repo-status 
-       :cannot-connect [:div "We couldn't find that repo!"]
-       :no-releases [:div "That repo hasn't performed any releases!"]
-       :valid nil
-       )]
+      {:class "col-span-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"}
+      [:div {:class "flex items-center justify-center "} "Submit"
+      [:img
+        {:class "htmx-indicator w-6 ml-1"
+         :src "https://samherbert.net/svg-loaders/svg-loaders/tail-spin.svg"}]]]]
     [:button 
      {:hx-post "repo-cards"
       :hx-target "#cards"
       :hx-swap "outerHTML"
       :hx-vals {:reload true}
-      :class "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"}
+      :class "bg-blue-500 hover:bg-blue-700 text-white font-bold my-2 py-2 px-4 rounded"}
       [:div {:class "flex items-center"} 
-       "Reload..."
+       "Check releases..."
        [:img
         {:class "htmx-indicator w-6 ml-1"
          :src "https://samherbert.net/svg-loaders/svg-loaders/tail-spin.svg"}]]]
