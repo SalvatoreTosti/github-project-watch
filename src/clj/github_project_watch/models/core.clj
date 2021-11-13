@@ -73,6 +73,18 @@
 (defn fetch-repos [user-id]
   (get-in @db [user-id :repos]))
 
+(defn save-repos-order [user-id repos]
+  (let [repo-data-lookup (->> [user-id :repos]
+                              (get-in @db)
+                              (mapv #(vector (:repo-link %) %))
+                              (into {}))
+        repos-new-order (mapv 
+                          (fn [repo] 
+                            (get repo-data-lookup (:repo-link repo))) 
+                          repos)]
+    (swap! db assoc-in [user-id :repos] repos-new-order)
+    repos-new-order))
+
 (defn mark-viewed [user-id repo-link viewed?]
   (swap! db update-in [user-id :repos] 
          (fn [repos]
@@ -101,8 +113,10 @@
                              latest-publish-date
                              (t/before? existing-publish-date latest-publish-date)))
                        (assoc fresh-repo :viewed false)
-                       existing-repo))) %))))
+                       existing-repo))) %))
+    (fetch-repos user-id)))
 
 (defn reset-viewed-repos [user-id]
   (swap! db update-in [user-id :repos] 
-         #(mapv (fn [repo] (assoc repo :viewed false)) %)))
+         #(mapv (fn [repo] (assoc repo :viewed false)) %))
+  (fetch-repos user-id))

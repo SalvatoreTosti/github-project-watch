@@ -24,6 +24,19 @@
      [:body (render/walk-attrs body)]
      [:script {:src "https://unpkg.com/htmx.org@1.5.0"}]
      [:script {:src "https://kit.fontawesome.com/e8c67d78ce.js" :crossorigin "anonymous"}]
+     [:script {:src  "https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"}]
+     [:script 
+      "htmx.onLoad(function(content) {
+         var sortables = content.querySelectorAll('.sortable');
+         for (var i = 0; i < sortables.length; i++) {
+           var sortable = sortables[i];
+           new Sortable(sortable, {
+           animation: 150,
+           ghostClass: 'blue-background-class'
+           });
+         }
+       })"
+      ]
      [:link {:href "https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" :rel "stylesheet"}]
      ))))
 
@@ -83,7 +96,6 @@
                                                                  first)]
         (cond 
           (not= 200 status) :cannot-connect
-          (not body) :no-releases
           :else :valid))
       :cannot-connect)))
 
@@ -126,7 +138,7 @@
       :hx-trigger "click"
       :hx-swap "outerHTML"
       :hx-post "new-toggle"
-      :hx-vals {:viewed true}
+      :hx-vals {:viewed true :repo-link repo-link}
       :hx-target "this"}
      "new"]))
 
@@ -138,7 +150,8 @@
    release-description
    html-url
    published-at
-   viewed]
+   viewed
+   repo]
   (if (= :delete request-method)
     (do (models/remove-repo (req->user-id req) repo-link)
         "")
@@ -146,16 +159,17 @@
                  (clojure.string/replace #"[^a-zA-Z\d\s:]" "-")
                  gensym
                  str)] 
-      [:form {:class "rounded overflow-hidden shadow-lg mt-2" :id id}
+      [:div {:class "rounded overflow-hidden shadow-lg mt-2" :id id}
+       (hidden-input "repos" (ch/generate-string repo))
        [:div {:class "px-6 py-4"}
         [:div {:class "items-center flex mb-2"}
-         [:span {:class "font-bold text-xl text-blue-500 hover:opacity-75"} [:a {:href repo-link :target "_"} repo-name]
-          (hidden-input "repo-link" repo-link)]
+         [:span {:class "font-bold text-xl text-blue-500 hover:opacity-75"} [:a {:href repo-link :target "_"} repo-name]]
          (new-toggle req repo-link viewed)
          [:div {:class "text-gray-500 hover:opacity-75 ml-auto fas fa-times fa-lg cursor-pointer"
                 :hx-delete "release-card"
                 :hx-confirm (str "Are you sure you wish to stop watching " repo-name "?")
                 :hx-target (str "#" id)
+                :hx-vals {:repo-link repo-link}
                 :hx-swap "outerHTML"}]]
         (when (and 
                 (not release-name) 
@@ -181,16 +195,27 @@
              ]))
         (when release-description
           [:div {:class "text-sm text-gray-600 overflow-auto mt-2"} 
-           release-description
-           ])]])))
+           release-description])]])))
 
 (ctmx/defcomponent ^:endpoint repo-cards 
-  [{:keys [request-method] :as req} ^:boolean reload ^:boolean reset]
-  (let [_ (when reload (models/reload (req->user-id req)))
-        _ (when reset (models/reset-viewed-repos (req->user-id req)))
-        repos (models/fetch-repos (req->user-id req))]
-    [:div {:class "grid grid-cols-1 lg:grid-cols-3 gap-4" :id "cards"}
-     (for [{:keys [repo-name repo-link latest-release viewed] :as repo} repos
+  [{:keys [request-method] :as req} repos ^:boolean reload ^:boolean reset]
+  (let [ repos (cond ;;Note: currently these behaviors are all mutually exclusive, but they would not have to be, a different conditional structure would allow for more flexibility 
+                (= :patch request-method) (->> repos
+                                               (mapv #(ch/parse-string % true))
+                                               (models/save-repos-order (req->user-id req))) 
+                reload (models/reload (req->user-id req))
+                reset (models/reset-viewed-repos (req->user-id req))
+                :else repos)
+        ]
+    [:form 
+     [:div {:class "grid grid-cols-1 lg:grid-cols-3 gap-4 sortable"
+           :hx-patch "repo-cards"
+           :hx-trigger "end"
+           :hx-target "this"
+           :hx-swap "outerHTML"
+           :hx-vals {:zek-repos repos}
+           :id "cards"}
+      (for [{:keys [repo-name repo-link latest-release viewed] :as repo} repos
            :let [{release-name :name release-description :body :keys [published_at html_url tag_name]} latest-release]]
        (release-card
          req 
@@ -200,7 +225,8 @@
          release-description 
          html_url
          published_at
-         viewed))]))
+         viewed
+         repo))]]))
 
 (ctmx/defcomponent ^:endpoint release-list [req ^:string input]
   (let [repo-status (validate-repo-link (req->user-id req) input)
@@ -223,7 +249,6 @@
         (let [label 
               (cond 
                 (= :cannot-connect repo-status) [:label {:class "text-red-500"} "We couldn't find that repo!"]
-                (= :no-releases repo-status) [:label {:class  "text-yellow-500"} "That repo hasn't performed any releases!"]
                 repo-exists [:label {:class  "text-yellow-500"} "You're already watching that repo!"]
 
                 (= :valid repo-status) [:label {:class "text-green-500"} "Added repo to list!"])] 
@@ -258,8 +283,7 @@
       [:img
        {:class "htmx-indicator w-6 ml-1"
         :src "https://samherbert.net/svg-loaders/svg-loaders/tail-spin.svg"}]]]]
-    (repo-cards req false false)]))
-
+    (repo-cards req (models/fetch-repos (req->user-id req)) false false)]))
 (defn home-routes []
   (ctmx/make-routes
    "/"
