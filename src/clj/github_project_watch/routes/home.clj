@@ -35,10 +35,8 @@
            ghostClass: 'blue-background-class'
            });
          }
-       })"
-      ]
-     [:link {:href "https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" :rel "stylesheet"}]
-     ))))
+       })"]
+     [:link {:href "https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" :rel "stylesheet"}]))))
 
 (defn nav-bar []
   [:nav {:class "relative flex flex-wrap items-center justify-between px-2 py-3 bg-blue-500 mb-3"}
@@ -88,21 +86,19 @@
                               (filter seq)
                               (drop 2))]
     (if (and user repo-name)
-      (let [{:keys [status body]} (models/http-get-authenticated 
-                                    user-id 
-                                    (str "https://api.github.com/repos/" user "/" repo-name "/releases"))
-            {:keys [html_url created_at] :as latest-release} (-> :published_at
-                                                                 (sort-by (ch/parse-string body true))
-                                                                 first)]
-        (cond 
-          (not= 200 status) :cannot-connect
-          :else :valid))
-      :cannot-connect)))
+      (->> "/releases"
+           (str "https://api.github.com/repos/" user "/" repo-name)
+           (models/http-get-authenticated user-id)
+           :status
+           (= 200))
+      false)))
 
 (ctmx/defcomponent ^:endpoint pal [req ^:string input]
   [:form
-   {:hx-target "this" :hx-swap "outerHTML" :class "grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3"
-     :hx-post "pal"}
+   {:hx-target "this" 
+    :hx-swap "outerHTML" 
+    :class "grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3" 
+    :hx-post "pal"}
    [:div {:class "col-span-1  lg:col-span-2"}
     (let [{:keys [login]} (validate-api-key input)
           input-border (cond 
@@ -153,13 +149,14 @@
    viewed
    repo]
   (if (= :delete request-method)
-    (do (models/remove-repo (req->user-id req) repo-link)
-        "")
+    (do 
+      (models/remove-repo (req->user-id req) repo-link)
+      "")
     (let [id (-> repo-name
                  (clojure.string/replace #"[^a-zA-Z\d\s:]" "-")
                  gensym
                  str)] 
-      [:div {:class "rounded overflow-hidden shadow-lg mt-2" :id id}
+      [:div {:class "rounded shadow-lg mt-2" :id id}
        (hidden-input "repos" (ch/generate-string repo))
        [:div {:class "px-6 py-4"}
         [:div {:class "items-center flex mb-2"}
@@ -177,13 +174,11 @@
                 (not release-description))
           [:div {:class "font-bold text-gray-500"}
            "no releases yet, check back later!"])
-        [:a {:class "font-bold text-gray-700 hover:opacity-75" :href html-url :target "_"} release-name
-         ]
+        [:a {:class "font-bold text-gray-700 hover:opacity-75" :href html-url :target "_"} release-name]
         (when published-at 
           (let [release-date (->> published-at
                                   f/parse
                                   (f/unparse (f/formatter "YYYY-MM-dd")))
-
                 days-since-release (->> (t/now)
                                         (t/interval (f/parse published-at))
                                         t/in-days)
@@ -191,10 +186,9 @@
                               "over a year ago" 
                               (str days-since-release " days ago"))]
             [:div {:class "text-sm text-gray-600"} 
-             (str release-date " (" days-string ")")
-             ]))
+             (str release-date " (" days-string ")")]))
         (when release-description
-          [:div {:class "text-sm text-gray-600 overflow-auto mt-2"} 
+          [:div {:class "text-sm text-gray-600 mt-2  overflow-auto  h-52"} 
            release-description])]])))
 
 (ctmx/defcomponent ^:endpoint repo-cards 
@@ -205,8 +199,7 @@
                                                (models/save-repos-order (req->user-id req))) 
                 reload (models/reload (req->user-id req))
                 reset (models/reset-viewed-repos (req->user-id req))
-                :else repos)
-        ]
+                :else repos)]
     [:form 
      [:div {:class "grid grid-cols-1 lg:grid-cols-3 gap-4 sortable"
            :hx-patch "repo-cards"
@@ -235,7 +228,7 @@
                         (mapv repos)
                         set
                         (get input))]
-    (when (and (= :valid repo-status) (not repo-exists))
+    (when (and repo-status (not repo-exists))
       (models/save-repo (req->user-id req) input))
     [:div {:id "release-list"}
     [:form
@@ -248,19 +241,19 @@
         [:label "Github Repository Link"]
         (let [label 
               (cond 
-                (= :cannot-connect repo-status) [:label {:class "text-red-500"} "We couldn't find that repo!"]
+                (not repo-status) [:label {:class "text-red-500"} "We couldn't find that repo!"]
                 repo-exists [:label {:class  "text-yellow-500"} "You're already watching that repo!"]
 
-                (= :valid repo-status) [:label {:class "text-green-500"} "Added repo to list!"])] 
+                repo-status [:label {:class "text-green-500"} "Added repo to list!"])] 
           label))
       [:input 
       {:name "input"
        :placeholder "Add a repo link here..."
-       :value (if (= repo-status :valid) nil input)
-       :class (let [classes " form-textarea w-full border rounded "]
+       :value (if repo-status nil input)
+       :class (let [classes " form-textarea w-full border rounded"]
                 (cond 
                   (not input) (str classes "border-blue-500")
-                  (not= repo-status :valid) (str classes "border-red-500")
+                  (not repo-status) (str classes "border-red-500")
                   :else (str classes "border-blue-500")))}]]
      (submit-button "Add repo")]
     [:div {:class "flex my-2"}
@@ -284,6 +277,7 @@
        {:class "htmx-indicator w-6 ml-1"
         :src "https://samherbert.net/svg-loaders/svg-loaders/tail-spin.svg"}]]]]
     (repo-cards req (models/fetch-repos (req->user-id req)) false false)]))
+
 (defn home-routes []
   (ctmx/make-routes
    "/"
