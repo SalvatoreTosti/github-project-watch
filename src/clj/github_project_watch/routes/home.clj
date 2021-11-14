@@ -130,7 +130,7 @@
       (models/mark-viewed (req->user-id req) repo-link true)
       "")
     [:div
-     {:class "rounded-full bg-green-400 uppercase px-2 py-1 text-xs font-bold ml-2 cursor-pointer hover:opacity-75 text-white "
+     {:class "rounded-full bg-green-400 uppercase px-2 py-1 text-xs font-bold mx-2 cursor-pointer hover:opacity-75 text-white "
       :hx-trigger "click"
       :hx-swap "outerHTML"
       :hx-post "new-toggle"
@@ -172,7 +172,7 @@
                 (not release-name) 
                 (not published-at)
                 (not release-description))
-          [:div {:class "font-bold text-gray-500"}
+          [:div {:class "font-bold text-gray-500 lg:h-52"}
            "no releases yet, check back later!"])
         [:a {:class "font-bold text-gray-700 hover:opacity-75" :href html-url :target "_"} release-name]
         (when published-at 
@@ -187,8 +187,8 @@
                               (str days-since-release " days ago"))]
             [:div {:class "text-sm text-gray-600"} 
              (str release-date " (" days-string ")")]))
-        (when release-description
-          [:div {:class "text-sm text-gray-600 mt-2  overflow-auto  h-52"} 
+        (when (not (empty? release-description))
+          [:div {:class "text-sm text-gray-600 mt-2 overflow-auto h-32 lg:h-52"} 
            release-description])]])))
 
 (ctmx/defcomponent ^:endpoint repo-cards 

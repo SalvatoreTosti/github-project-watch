@@ -97,8 +97,8 @@
 (defn reload [user-id]
   (let [repo-links (mapv :repo-link (get-in @db [user-id :repos])) 
         fresh-repos (->> repo-links
-                   (mapv #(vector % (fetch-repo user-id %)))
-                   (into {}))]
+                         (mapv #(vector % (fetch-repo user-id %)))
+                         (into {}))]
     (swap! db update-in [user-id :repos] 
            #(mapv (fn [{:keys [repo-link] :as existing-repo}]
                    (let [fresh-repo (get fresh-repos repo-link)
