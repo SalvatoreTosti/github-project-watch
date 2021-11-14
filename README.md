@@ -6,7 +6,7 @@
  3. enter a valid Github API key into the prompt
  4. add your favorite repos to keep an eye on releases!
 
-Alternatively, you can view a hosted copy of the app on [Heroku](https://github-project-watch.herokuapp.com/)
+Alternatively, you can view a running copy of the app at https://github-project-watch.herokuapp.com/
 
 ## Prerequisites
 
@@ -17,6 +17,7 @@ You will need [Leiningen][1] 2.0 or above installed.
 ## Built With
 
 * [ctmx](https://www.ctmx.info/)
+* [luminus](https://luminusweb.com/)
 
 ## License
 
