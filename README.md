@@ -17,6 +17,9 @@ You will need [Leiningen][1] 2.0 or above installed.
 ## Built With
 
 * [ctmx](https://www.ctmx.info/)
+* [htmx](https://htmx.org/)
+* [tailwind](https://tailwindcss.com/)
+* [SortableJS](http://sortablejs.github.io/Sortable/)
 * [luminus](https://luminusweb.com/)
 
 ## License
